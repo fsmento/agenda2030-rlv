@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Secretarias — Agenda 2030 RJ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #f7f8fa;
+    --surface:  #ffffff;
+    --border:   #e4e7ed;
+    --text-1:   #1a1d23;
+    --text-2:   #5a6070;
+    --text-3:   #9ba3b0;
+    --accent:   #19486A;   /* ODS-17 azul */
+    --radius:   10px;
+    --shadow:   0 2px 12px rgba(0,0,0,0.07);
+    --font:     "Inter", "Helvetica Neue", Arial, sans-serif;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text-1);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  header {
+    background: var(--accent);
+    color: #fff;
+    padding: 18px 32px 16px;
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+  header h1 { font-size: 17px; font-weight: 700; letter-spacing: -.2px; }
+  header span { font-size: 12px; opacity: .65; }
+
+  .tabs-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    display: flex;
+    gap: 0;
+  }
+  .tab-btn {
+    font-size: 13px;
+    font-family: var(--font);
+    font-weight: 500;
+    color: var(--text-2);
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    padding: 13px 20px 11px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-btn:hover:not(.active) { color: var(--text-1); }
+
+  .panel { display: none; padding: 28px 32px 32px; }
+  .panel.active { display: block; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 24px 28px 20px;
+  }
+  .card h2 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-2);
+    letter-spacing: .4px;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+
+  .chart-wrap-ods  { position: relative; width: 100%; height: 420px; }
+  .chart-wrap-meta { position: relative; width: 100%; overflow-y: auto; max-height: 72vh; }
+  .chart-wrap-meta canvas { display: block; }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--text-2);
+  }
+  .legend-swatch {
+    width: 10px; height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  footer {
+    text-align: center;
+    font-size: 10px;
+    color: var(--text-3);
+    padding: 16px 32px 20px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Secretarias &amp; Agenda 2030 — Estado do Rio de Janeiro</h1>
+  <span>Observatório RLV</span>
+</header>
+
+<div class="tabs-bar">
+  <button class="tab-btn active" onclick="showTab('ods', this)">Por ODS</button>
+  <button class="tab-btn" onclick="showTab('meta', this)">Por Meta</button>
+</div>
+
+<div id="panel-ods" class="panel active">
+  <div class="card">
+    <h2>Aparições de secretarias por Objetivo de Desenvolvimento Sustentável</h2>
+    <div class="chart-wrap-ods"><canvas id="chartODS"></canvas></div>
+    <div class="legend" id="legend-ods"></div>
+  </div>
+</div>
+
+<div id="panel-meta" class="panel">
+  <div class="card">
+    <h2>Secretarias envolvidas por Meta</h2>
+    <div class="chart-wrap-meta" id="metaWrap">
+      <canvas id="chartMeta"></canvas>
+    </div>
+    <div class="legend" id="legend-meta"></div>
+  </div>
+</div>
+
+<footer>Cores oficiais ODS / ONU &nbsp;·&nbsp; Fonte: Agenda 2030 — Observatório RLV</footer>
+
+<script>
+const SEC_COLOR = {
+  "SEAS":"#4C9F38","SEDSODH":"#E5243B","INEA":"#3F7E44","SES":"#C5192D",
+  "SEENEMAR":"#FD6925","SEDEICS":"#A21942","SEM":"#FF3A21","SEAPPA":"#DDA63A",
+  "SEEDUC":"#FCC30B","SETRAB":"#00689D","SECTI":"#DD1367","SEFAZ":"#26BDE2",
+  "SETD":"#FD9D24","SEPLAG":"#BF8B2E","FIPERJ":"#0A97D9","RI":"#56C02B",
+  "SESP":"#19486A","ISP":"#6B4FA0","SECID":"#FF6B35","SECC":"#8B4513",
+  "SETRAM":"#708090","SETUR":"#DC143C","SEDEC":"#2E8B57","SEHIS":"#B8860B",
+  "SECEC":"#4682B4","SEASA":"#9ACD32","PESAGRO":"#CD853F","SEOP":"#6495ED",
+  "SEC-RI":"#DB7093","CGE":"#556B2F"
+};
+
+const byODS = {"1":{"SEDSODH":7,"SEAS":1,"INEA":1},"2":{"SEAPPA":5,"PESAGRO":1,"SEASA":1,"SEDSODH":2},"3":{"SES":12,"SEDSODH":1,"INEA":1,"SEDEC":1},"4":{"SECTI":2,"SETRAB":1,"SEEDUC":8,"SEM":1},"5":{"SEM":8},"6":{"SEAS":8},"7":{"SEENEMAR":5},"8":{"SEDEICS":4,"SEAS":1,"SEDSODH":3,"SETRAB":6,"SECTI":2,"SETUR":1,"SEENEMAR":1},"9":{"SECTI":1,"SEDEICS":3,"SEAS":1,"INEA":1,"SEENEMAR":1,"SETD":1,"SETRAM":1},"10":{"SEDSODH":5,"SEDEICS":1},"11":{"INEA":3,"SEAS":3,"SECEC":1,"SECID":2,"SEOP":1,"SEDSODH":1,"SEHIS":1,"SETRAM":1},"12":{"INEA":1,"SEAPPA":1,"SEAS":7,"SEDEICS":1,"SEENEMAR":4,"SEPLAG":1},"13":{"SEAS":4,"INEA":2},"14":{"FIPERJ":2,"SEENEMAR":4,"SEAPPA":1,"SEAS":7,"INEA":3},"15":{"INEA":11,"SEAS":10,"SEAPPA":1},"16":{"CGE":1,"SEFAZ":1,"SEDSODH":6,"SESP":2,"ISP":2,"SETD":2,"SEPLAG":1},"17":{"SEAS":7,"RI":2,"SEPLAG":1,"SETD":1,"SECC":1,"SECTI":1,"SEDEICS":2,"SEC-RI":1,"SEFAZ":2}};
+
+const metaRaw = [{"meta":"16.5","ods":16,"secs":["CGE","SEFAZ"]},{"meta":"14.b","ods":14,"secs":["FIPERJ","SEENEMAR"]},{"meta":"11.5","ods":11,"secs":["INEA"]},{"meta":"12.6","ods":12,"secs":["INEA"]},{"meta":"15.7","ods":15,"secs":["INEA"]},{"meta":"15.8","ods":15,"secs":["INEA"]},{"meta":"2.3","ods":2,"secs":["SEAPPA"]},{"meta":"2.4","ods":2,"secs":["SEAPPA"]},{"meta":"2.5","ods":2,"secs":["SEAPPA","PESAGRO"]},{"meta":"2.a","ods":2,"secs":["SEAPPA"]},{"meta":"2.c","ods":2,"secs":["SEAPPA","SEASA"]},{"meta":"12.3","ods":12,"secs":["SEAPPA"]},{"meta":"14.6","ods":14,"secs":["SEAPPA","FIPERJ"]},{"meta":"6.1","ods":6,"secs":["SEAS"]},{"meta":"6.2","ods":6,"secs":["SEAS"]},{"meta":"6.3","ods":6,"secs":["SEAS"]},{"meta":"6.4","ods":6,"secs":["SEAS"]},{"meta":"6.5","ods":6,"secs":["SEAS"]},{"meta":"6.6","ods":6,"secs":["SEAS"]},{"meta":"6.a","ods":6,"secs":["SEAS"]},{"meta":"6.b","ods":6,"secs":["SEAS"]},{"meta":"11.6","ods":11,"secs":["SEAS","INEA"]},{"meta":"11.b","ods":11,"secs":["SEAS","INEA"]},{"meta":"11.c","ods":11,"secs":["SEAS"]},{"meta":"12.1","ods":12,"secs":["SEAS","SEDEICS"]},{"meta":"12.2","ods":12,"secs":["SEAS","SEENEMAR"]},{"meta":"12.4","ods":12,"secs":["SEAS"]},{"meta":"12.5","ods":12,"secs":["SEAS","SEENEMAR"]},{"meta":"12.8","ods":12,"secs":["SEAS"]},{"meta":"12.a","ods":12,"secs":["SEAS","SEENEMAR"]},{"meta":"12.b","ods":12,"secs":["SEAS"]},{"meta":"13.1","ods":13,"secs":["SEAS","INEA"]},{"meta":"13.2","ods":13,"secs":["SEAS"]},{"meta":"13.3","ods":13,"secs":["SEAS","INEA"]},{"meta":"13.b","ods":13,"secs":["SEAS"]},{"meta":"14.1","ods":14,"secs":["SEAS","INEA"]},{"meta":"14.2","ods":14,"secs":["SEAS","INEA"]},{"meta":"14.3","ods":14,"secs":["SEAS"]},{"meta":"14.4","ods":14,"secs":["SEAS"]},{"meta":"14.5","ods":14,"secs":["SEAS","INEA","SEENEMAR"]},{"meta":"14.7","ods":14,"secs":["SEAS","SEENEMAR"]},{"meta":"14.a","ods":14,"secs":["SEAS","SEENEMAR"]},{"meta":"15.1","ods":15,"secs":["SEAS","INEA"]},{"meta":"15.2","ods":15,"secs":["SEAS","INEA"]},{"meta":"15.3","ods":15,"secs":["SEAS","SEAPPA"]},{"meta":"15.4","ods":15,"secs":["SEAS","INEA"]},{"meta":"15.5","ods":15,"secs":["SEAS","INEA"]},{"meta":"15.6","ods":15,"secs":["SEAS","INEA"]},{"meta":"15.9","ods":15,"secs":["SEAS","INEA"]},{"meta":"15.a","ods":15,"secs":["SEAS","INEA"]},{"meta":"15.b","ods":15,"secs":["SEAS","INEA"]},{"meta":"15.c","ods":15,"secs":["SEAS","INEA"]},{"meta":"17.9","ods":17,"secs":["SEAS","RI","SEPLAG"]},{"meta":"17.14","ods":17,"secs":["SEAS"]},{"meta":"17.15","ods":17,"secs":["SEAS"]},{"meta":"17.16","ods":17,"secs":["SEAS","SETD"]},{"meta":"17.17","ods":17,"secs":["SEAS"]},{"meta":"17.18","ods":17,"secs":["SEAS"]},{"meta":"17.19","ods":17,"secs":["SEAS"]},{"meta":"17.6","ods":17,"secs":["SECC","RI","SECTI"]},{"meta":"11.4","ods":11,"secs":["SECEC"]},{"meta":"11.3","ods":11,"secs":["SECID","SEOP"]},{"meta":"11.a","ods":11,"secs":["SECID"]},{"meta":"4.4","ods":4,"secs":["SECTI","SETRAB","SEEDUC"]},{"meta":"9.b","ods":9,"secs":["SECTI"]},{"meta":"8.1","ods":8,"secs":["SEDEICS"]},{"meta":"8.2","ods":8,"secs":["SEDEICS"]},{"meta":"8.4","ods":8,"secs":["SEDEICS","SEAS"]},{"meta":"9.2","ods":9,"secs":["SEDEICS"]},{"meta":"9.3","ods":9,"secs":["SEDEICS"]},{"meta":"9.4","ods":9,"secs":["SEDEICS","SEAS","INEA","SEENEMAR"]},{"meta":"17.3","ods":17,"secs":["SEDEICS"]},{"meta":"17.11","ods":17,"secs":["SEDEICS","SEC-RI"]},{"meta":"1.1","ods":1,"secs":["SEDSODH"]},{"meta":"1.2","ods":1,"secs":["SEDSODH"]},{"meta":"1.3","ods":1,"secs":["SEDSODH"]},{"meta":"1.4","ods":1,"secs":["SEDSODH"]},{"meta":"1.5","ods":1,"secs":["SEDSODH","SEAS","INEA"]},{"meta":"1.a","ods":1,"secs":["SEDSODH"]},{"meta":"1.b","ods":1,"secs":["SEDSODH"]},{"meta":"2.1","ods":2,"secs":["SEDSODH"]},{"meta":"2.2","ods":2,"secs":["SEDSODH"]},{"meta":"8.7","ods":8,"secs":["SEDSODH"]},{"meta":"10.1","ods":10,"secs":["SEDSODH","SEDEICS"]},{"meta":"10.2","ods":10,"secs":["SEDSODH"]},{"meta":"10.3","ods":10,"secs":["SEDSODH"]},{"meta":"10.4","ods":10,"secs":["SEDSODH"]},{"meta":"10.7","ods":10,"secs":["SEDSODH"]},{"meta":"11.7","ods":11,"secs":["SEDSODH"]},{"meta":"16.2","ods":16,"secs":["SEDSODH"]},{"meta":"16.3","ods":16,"secs":["SEDSODH"]},{"meta":"16.9","ods":16,"secs":["SEDSODH"]},{"meta":"16.a","ods":16,"secs":["SEDSODH"]},{"meta":"16.b","ods":16,"secs":["SEDSODH"]},{"meta":"4.1","ods":4,"secs":["SEEDUC"]},{"meta":"4.3","ods":4,"secs":["SEEDUC","SECTI"]},{"meta":"4.5","ods":4,"secs":["SEEDUC","SEM"]},{"meta":"4.6","ods":4,"secs":["SEEDUC"]},{"meta":"4.7","ods":4,"secs":["SEEDUC"]},{"meta":"4.a","ods":4,"secs":["SEEDUC"]},{"meta":"4.c","ods":4,"secs":["SEEDUC"]},{"meta":"7.1","ods":7,"secs":["SEENEMAR"]},{"meta":"7.2","ods":7,"secs":["SEENEMAR"]},{"meta":"7.3","ods":7,"secs":["SEENEMAR"]},{"meta":"7.a","ods":7,"secs":["SEENEMAR"]},{"meta":"7.b","ods":7,"secs":["SEENEMAR"]},{"meta":"12.c","ods":12,"secs":["SEENEMAR"]},{"meta":"17.1","ods":17,"secs":["SEFAZ"]},{"meta":"17.4","ods":17,"secs":["SEFAZ"]},{"meta":"11.1","ods":11,"secs":["SEHIS"]},{"meta":"5.1","ods":5,"secs":["SEM"]},{"meta":"5.2","ods":5,"secs":["SEM"]},{"meta":"5.3","ods":5,"secs":["SEM"]},{"meta":"5.4","ods":5,"secs":["SEM"]},{"meta":"5.5","ods":5,"secs":["SEM"]},{"meta":"5.6","ods":5,"secs":["SEM"]},{"meta":"5.a","ods":5,"secs":["SEM"]},{"meta":"5.c","ods":5,"secs":["SEM"]},{"meta":"12.7","ods":12,"secs":["SEPLAG"]},{"meta":"3.1","ods":3,"secs":["SES"]},{"meta":"3.2","ods":3,"secs":["SES"]},{"meta":"3.3","ods":3,"secs":["SES"]},{"meta":"3.4","ods":3,"secs":["SES"]},{"meta":"3.5","ods":3,"secs":["SES","SEDSODH"]},{"meta":"3.6","ods":3,"secs":["SES"]},{"meta":"3.7","ods":3,"secs":["SES"]},{"meta":"3.8","ods":3,"secs":["SES"]},{"meta":"3.9","ods":3,"secs":["SES","INEA"]},{"meta":"3.b","ods":3,"secs":["SES"]},{"meta":"3.c","ods":3,"secs":["SES"]},{"meta":"3.d","ods":3,"secs":["SES","SEDEC"]},{"meta":"16.1","ods":16,"secs":["SESP","ISP"]},{"meta":"16.4","ods":16,"secs":["SESP","ISP"]},{"meta":"9.c","ods":9,"secs":["SETD"]},{"meta":"16.6","ods":16,"secs":["SETD","SEPLAG"]},{"meta":"16.1","ods":16,"secs":["SETD","SEDSODH"]},{"meta":"8.3","ods":8,"secs":["SETRAB","SEDEICS","SECTI"]},{"meta":"8.5","ods":8,"secs":["SETRAB","SEDSODH"]},{"meta":"8.6","ods":8,"secs":["SETRAB","SECTI"]},{"meta":"8.8","ods":8,"secs":["SETRAB","SEDSODH"]},{"meta":"8.b","ods":8,"secs":["SETRAB"]},{"meta":"9.1","ods":9,"secs":["SETRAM"]},{"meta":"11.2","ods":11,"secs":["SETRAM"]},{"meta":"8.9","ods":8,"secs":["SETUR","SEENEMAR","SETRAB"]}];
+
+// ─── helpers ────────────────────────────────────────────────
+const allSecs = Object.keys(SEC_COLOR);
+const odsKeys = Object.keys(byODS).map(Number).sort((a,b)=>a-b);
+
+// dominant sec per ODS
+const dominant = {};
+odsKeys.forEach(o => {
+  dominant[o] = Object.entries(byODS[o]).sort((a,b)=>b[1]-a[1])[0][0];
+});
+
+// build legend
+function buildLegend(el) {
+  allSecs.forEach(s => {
+    const d = document.createElement('div');
+    d.className = 'legend-item';
+    d.innerHTML = `<span class="legend-swatch" style="background:${SEC_COLOR[s]}"></span>${s}`;
+    el.appendChild(d);
+  });
+}
+buildLegend(document.getElementById('legend-ods'));
+buildLegend(document.getElementById('legend-meta'));
+
+// ─── vertical label plugin ───────────────────────────────────
+const vertPlugin = {
+  id: 'vertLabel',
+  afterDatasetsDraw(chart) {
+    const { ctx, data, scales: { x, y } } = chart;
+    odsKeys.forEach((ods, i) => {
+      const dom = dominant[ods];
+      const dIdx = allSecs.indexOf(dom);
+      if (dIdx < 0) return;
+      let stackBot = 0;
+      for (let d = 0; d < dIdx; d++) stackBot += (data.datasets[d].data[i] || 0);
+      const val = data.datasets[dIdx].data[i] || 0;
+      if (!val) return;
+      const xPos = x.getPixelForValue(i);
+      const yTop = y.getPixelForValue(stackBot + val);
+      const yBot = y.getPixelForValue(stackBot);
+      const segH = yBot - yTop;
+      if (segH < 20) return;
+      const slotW = x.width / odsKeys.length;
+      ctx.save();
+      ctx.translate(xPos, yTop + segH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.font = `bold ${Math.min(11, segH * 0.42)}px Inter, Arial, sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.93)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.beginPath();
+      ctx.rect(-segH/2, -slotW*0.34, segH, slotW*0.68);
+      ctx.clip();
+      ctx.fillText(dom, 0, 0);
+      ctx.restore();
+    });
+  }
+};
+
+// ─── ODS chart ───────────────────────────────────────────────
+const odsDatasets = allSecs.map(sec => ({
+  label: sec,
+  data: odsKeys.map(o => byODS[o][sec] || 0),
+  backgroundColor: SEC_COLOR[sec],
+  borderWidth: 0,
+}));
+
+new Chart(document.getElementById('chartODS'), {
+  type: 'bar',
+  data: { labels: odsKeys.map(o => 'ODS ' + o), datasets: odsDatasets },
+  plugins: [vertPlugin],
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        mode: 'index', intersect: false,
+        callbacks: {
+          afterBody: items => {
+            const t = items.reduce((s,i)=>s+i.parsed.y,0);
+            return t ? ['─────','Total: '+t] : [];
+          }
+        }
+      }
+    },
+    scales: {
+      x: { stacked:true, ticks:{font:{size:11},color:'#888'}, grid:{display:false} },
+      y: { stacked:true, ticks:{font:{size:11},color:'#aaa'}, grid:{color:'rgba(0,0,0,0.05)'},
+           title:{display:true,text:'aparições',font:{size:11},color:'#bbb'} }
+    }
+  }
+});
+
+// ─── Meta chart ──────────────────────────────────────────────
+const sorted = [...metaRaw].sort((a,b)=>
+  a.ods !== b.ods ? a.ods-b.ods : a.meta.localeCompare(b.meta,undefined,{numeric:true})
+);
+const metaLabels = sorted.map(m => `ODS ${m.ods} · ${m.meta}`);
+const metaDatasets = allSecs.map(sec => ({
+  label: sec,
+  data: sorted.map(m => m.secs.includes(sec) ? 1 : 0),
+  backgroundColor: SEC_COLOR[sec],
+  borderWidth: 0,
+}));
+
+const BAR_H = 20;
+const metaH = sorted.length * BAR_H + 60;
+const metaCanvas = document.getElementById('chartMeta');
+metaCanvas.style.height = metaH + 'px';
+metaCanvas.style.width  = '100%';
+metaCanvas.height = metaH;
+
+new Chart(metaCanvas, {
+  type: 'bar',
+  data: { labels: metaLabels, datasets: metaDatasets },
+  options: {
+    indexAxis: 'y',
+    responsive: false,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { mode:'index', intersect:false,
+        callbacks: { title: i => i[0].label } }
+    },
+    scales: {
+      x: { stacked:true, ticks:{font:{size:11},color:'#aaa',stepSize:1},
+           grid:{color:'rgba(0,0,0,0.05)'},
+           title:{display:true,text:'nº de secretarias',font:{size:11},color:'#bbb'} },
+      y: { stacked:true, ticks:{font:{size:10.5},color:'#666'}, grid:{display:false} }
+    }
+  }
+});
+
+// ─── tab switcher ────────────────────────────────────────────
+function showTab(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
